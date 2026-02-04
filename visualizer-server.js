@@ -182,7 +182,12 @@ wss.on('connection', (ws) => {
 
         // Build crawl command with streaming flag
         const args = ['crawler.js', '--mode', msg.mode, '--streaming'];
-        if (msg.path) args.push('--path', msg.path);
+        if (msg.mode === 'web') {
+          // Frontend sends URL in 'path' field
+          if (msg.path) args.push('--url', msg.path);
+        } else {
+          if (msg.path) args.push('--path', msg.path);
+        }
         if (msg.url) args.push('--url', msg.url);
         if (msg.bucket) args.push('--bucket', msg.bucket);
         if (msg.depth) args.push('--depth', String(msg.depth));

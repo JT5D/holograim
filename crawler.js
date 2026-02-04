@@ -859,6 +859,7 @@ async function main() {
     .option('-d, --depth <depth>', 'Max crawl depth', '10')
     .option('-c, --concurrency <num>', 'Concurrent requests', '50')
     .option('-o, --output <dir>', 'Output directory', CONFIG.outputDir)
+    .option('-s, --streaming', 'Enable real-time streaming output')
     .option('--prefix <prefix>', 'S3 prefix filter', '')
     .option('--same-domain', 'Stay on same domain (web mode)', true)
     .parse();
