@@ -15,26 +15,29 @@
   <!-- PeerJS for multiplayer -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
-    /* VisionOS / MRTK Theme */
+    /* VisionOS / MRTK Theme - REFINED for Usability */
     :root {
-      --bg: #000000;
-      /* Glassmorphism */
-      --glass: rgba(22, 27, 34, 0.65);
-      --glass-hover: rgba(40, 45, 55, 0.8);
-      --glass-border: rgba(255, 255, 255, 0.1);
+      --bg: #050505;
+      /* Deep black */
+      /* Subtle Glass - mostly solid for readability */
+      --glass: rgba(22, 27, 34, 0.95);
+      --glass-hover: rgba(40, 45, 55, 1);
+      --glass-border: rgba(255, 255, 255, 0.15);
       /* Accents */
-      --accent: #2997ff;
-      /* Apple Blue */
-      --accent-glow: rgba(41, 151, 255, 0.4);
-      --accent-secondary: #ff3b30;
+      --accent: #0a84ff;
+      /* Clearer Blue */
+      --accent-glow: rgba(10, 132, 255, 0.3);
+      --accent-secondary: #ff453a;
       --text: #ffffff;
-      --text-dim: rgba(255, 255, 255, 0.6);
+      --text-dim: #98989d;
+      /* Higher contrast grey */
       /* Success/Warning */
-      --success: #30d158;
+      --success: #32d74b;
       --warning: #ff9f0a;
       /* Radius */
-      --radius-panel: 24px;
-      --radius-btn: 20px;
+      --radius-panel: 16px;
+      /* Tighter radius */
+      --radius-btn: 12px;
     }
 
     * {
@@ -44,51 +47,58 @@
     }
 
     body {
-      background: radial-gradient(circle at 60% -20%, #1a1f35 0%, #000000 70%);
-      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Helvetica, Arial, sans-serif;
+      background: #000000;
+      /* Solid back for perf & contrast */
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", Helvetica, Arial, sans-serif;
       color: var(--text);
       height: 100vh;
       overflow: hidden;
       letter-spacing: -0.01em;
+      line-height: 1.5;
     }
 
-    /* Floating Layout */
+    /* Layout - Full Width Use */
     .app {
       display: grid;
-      grid-template-columns: 320px 1fr 300px;
-      grid-template-rows: 70px 1fr;
+      grid-template-columns: 280px 1fr 320px;
+      grid-template-rows: 64px 1fr;
       height: 100vh;
-      gap: 16px;
-      padding: 16px;
+      gap: 12px;
+      /* Tighter gap */
+      padding: 12px;
     }
 
-    /* GLASS PANEL MIXIN STYLE */
+    /* High Contrast Panels */
     .glass-panel {
       background: var(--glass);
-      backdrop-filter: blur(25px);
-      -webkit-backdrop-filter: blur(25px);
+      backdrop-filter: blur(40px);
+      /* Heavier blur helps readability if transparent */
+      -webkit-backdrop-filter: blur(40px);
       border: 1px solid var(--glass-border);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+      /* Deeper shadow */
       border-radius: var(--radius-panel);
     }
 
-    /* Header: Floating Pill Bar */
+    /* Header - Clean Bar */
     header {
       grid-column: 1 / -1;
       display: flex;
       align-items: center;
-      padding: 0 24px;
-      gap: 20px;
+      padding: 0 20px;
+      gap: 16px;
       z-index: 100;
+      background: rgba(22, 27, 34, 0.95);
+      /* Match glass var */
     }
 
     header.glass-panel {
       /* Merge panel styles */
       background: var(--glass);
-      backdrop-filter: blur(25px);
-      -webkit-backdrop-filter: blur(25px);
+      backdrop-filter: blur(40px);
+      -webkit-backdrop-filter: blur(40px);
       border: 1px solid var(--glass-border);
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
       border-radius: var(--radius-panel);
     }
 
@@ -97,6 +107,7 @@
       font-weight: 700;
       background: linear-gradient(135deg, #fff 0%, var(--accent) 100%);
       -webkit-background-clip: text;
+      background-clip: text;
       -webkit-text-fill-color: transparent;
       letter-spacing: -0.03em;
     }
@@ -596,6 +607,23 @@
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
     }
   </style>
+</head>
+
+<body>
+  <div class="app">
+    <header class="glass-panel">
+      <div class="logo">⚡ Ultra-Crawler Pro</div>
+      <div class="tabs">
+        <button class="tab active" data-view="treemap">Treemap</button>
+        <button class="tab" data-view="sunburst">Sunburst</button>
+        <button class="tab" data-view="treemap3d">3D Map</button>
+        <button class="tab" data-view="sunburst3d">3D Sun</button>
+        <button class="tab" data-view="graph3d">3D Graph</button>
+      </div>
+      <div class="search">
+        <input type="text" id="search" placeholder="Search files...">
+        <button class="voice-btn" id="voice-btn">🎤</button>
+      </div>
       <div class="stats">
         <span><span class="stat-val" id="s-items">0</span> items</span>
         <span><span class="stat-val" id="s-size">0</span></span>
@@ -1911,7 +1939,7 @@
     if (urlRoom) {
       // Auto-join if room param exists
       console.log('🔗 Auto-joining room:', urlRoom);
-      setTimeout(() => initPeer(urlRoom, false), 1000); // 1s delay for PeerJS to load
+      setTimeout(() => initPeer(urlRoom, false), 1000); // 1s delay for PeerJS to lo
     }
   </script>
 </body>
