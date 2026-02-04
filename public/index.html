@@ -633,7 +633,7 @@
     // ═══════════════════════════════════════════════════════════════════════════
 
     const $ = id => document.getElementById(id);
-    const formatBytes = b => { if (!b) return '0 B'; const k = 1024, s = ['B','KB','MB','GB','TB']; const i = Math.floor(Math.log(b)/Math.log(k)); return (b/Math.pow(k,i)).toFixed(1)+' '+s[i]; };
+    const formatBytes = b => { if (!b) return '0 B'; const k = 1024, s = ['B', 'KB', 'MB', 'GB', 'TB']; const i = Math.floor(Math.log(b) / Math.log(k)); return (b / Math.pow(k, i)).toFixed(1) + ' ' + s[i]; };
     const formatNum = n => n?.toLocaleString() || '0';
 
     const COLORS = {
@@ -650,7 +650,7 @@
     const getColor = (type, ext) => COLORS[ext] || COLORS[type] || COLORS.default;
     const getIcon = (type, ext) => {
       if (type === 'directory') return '📁';
-      const icons = { '.js':'📜', '.ts':'📜', '.py':'🐍', '.html':'🌐', '.css':'🎨', '.json':'📋', '.md':'📝', '.jpg':'🖼️', '.png':'🖼️', '.pdf':'📕', '.mp4':'🎬', '.mp3':'🎵', '.zip':'📦' };
+      const icons = { '.js': '📜', '.ts': '📜', '.py': '🐍', '.html': '🌐', '.css': '🎨', '.json': '📋', '.md': '📝', '.jpg': '🖼️', '.png': '🖼️', '.pdf': '📕', '.mp4': '🎬', '.mp3': '🎵', '.zip': '📦' };
       return icons[ext] || '📄';
     };
 
@@ -679,7 +679,7 @@
       const w = canvas.width / devicePixelRatio, h = canvas.height / devicePixelRatio;
       ctx.clearRect(0, 0, w, h);
 
-      const d3Root = d3.hierarchy(root).sum(d => d.size || 1).sort((a,b) => b.value - a.value);
+      const d3Root = d3.hierarchy(root).sum(d => d.size || 1).sort((a, b) => b.value - a.value);
       d3.treemap().size([w, h]).paddingOuter(2).paddingTop(16).paddingInner(1).round(true)(d3Root);
 
       layoutCache = d3Root.descendants().filter(d => d.depth > 0 && d.depth <= 4);
@@ -736,7 +736,7 @@
 
       ctx.clearRect(0, 0, w, h);
 
-      const d3Root = d3.hierarchy(root).sum(d => d.size || 1).sort((a,b) => b.value - a.value);
+      const d3Root = d3.hierarchy(root).sum(d => d.size || 1).sort((a, b) => b.value - a.value);
       d3.partition().size([2 * Math.PI, radius])(d3Root);
 
       layoutCache = d3Root.descendants().filter(d => d.depth > 0 && d.depth <= 6);
@@ -744,8 +744,8 @@
       for (const d of layoutCache) {
         const innerR = d.y0, outerR = d.y1;
         ctx.beginPath();
-        ctx.arc(cx, cy, outerR, d.x0 - Math.PI/2, d.x1 - Math.PI/2);
-        ctx.arc(cx, cy, innerR, d.x1 - Math.PI/2, d.x0 - Math.PI/2, true);
+        ctx.arc(cx, cy, outerR, d.x0 - Math.PI / 2, d.x1 - Math.PI / 2);
+        ctx.arc(cx, cy, innerR, d.x1 - Math.PI / 2, d.x0 - Math.PI / 2, true);
         ctx.closePath();
         ctx.fillStyle = getColor(d.data.type, d.data.ext);
         ctx.globalAlpha = d.children ? 0.7 : 0.9;
@@ -769,11 +769,11 @@
 
     function renderFlameCanvas(root) {
       const start = performance.now();
-      const w = canvas.width / devicePixelRat io, h = canvas.height / devicePixelRatio;
+      const w = canvas.width / devicePixelRatio, h = canvas.height / devicePixelRatio;
 
       ctx.clearRect(0, 0, w, h);
 
-      const d3Root = d3.hierarchy(root).sum(d => d.size || 1).sort((a,b) => b.value - a.value);
+      const d3Root = d3.hierarchy(root).sum(d => d.size || 1).sort((a, b) => b.value - a.value);
       d3.partition().size([w, h]).padding(1)(d3Root);
 
       layoutCache = d3Root.descendants().filter(d => d.depth <= 8);
@@ -788,9 +788,9 @@
 
         if (bw > 30) {
           ctx.globalAlpha = 1;
-           ctx.fillStyle = '#fff';
+          ctx.fillStyle = '#fff';
           ctx.font = '9px -apple-system';
-          ctx.fillText(d.data.name.slice(0, Math.floor(bw/5)), d.x0 + 2, d.y0 + 10);
+          ctx.fillText(d.data.name.slice(0, Math.floor(bw / 5)), d.x0 + 2, d.y0 + 10);
         }
       }
       ctx.globalAlpha = 1;
@@ -813,22 +813,70 @@
 
       const nodes = [], links = [];
       let id = 0;
-      const traverse = (node, parentId = null) => {
+
+      // PERFORMANCE: Limit total nodes for 60fps on Apple Silicon
+      const MAX_NODES = 2000;  // Optimal for 60fps
+      const MAX_CHILDREN_PER_NODE = 50;
+
+      const traverse = (node, parentId = null, depth = 0) => {
+        if (nodes.length >= MAX_NODES) return;
+        if (depth > 5) return; // Limit depth for performance
+
         const nid = id++;
-        nodes.push({ id: nid, name: node.name, type: node.type, size: node.size, ext: node.ext, color: getColor(node.type, node.ext), val: Math.log10(Math.max(node.size||1,1))+1 });
-        if (parentId !== null) links.push({ source: parentId, target: nid });
-        (node.children || []).slice(0, 300).forEach(c => traverse(c, nid));
+        const nodeSize = Math.log10(Math.max(node.size || 1, 1)) + 1;
+
+        nodes.push({
+          id: nid,
+          name: node.name,
+          type: node.type,
+          size: node.size,
+          ext: node.ext,
+          color: getColor(node.type, node.ext),
+          val: nodeSize,
+          // Pre-compute for faster rendering
+          __threeObj: null
+        });
+
+        if (parentId !== null) {
+          links.push({ source: parentId, target: nid });
+        }
+
+        // Limit children per node
+        const children = (node.children || []).slice(0, MAX_CHILDREN_PER_NODE);
+        children.forEach(c => traverse(c, nid, depth + 1));
       };
       traverse(root);
 
-      graph3D = ForceGraph3D()(container)
+      console.log(`🎮 3D Graph: ${nodes.length} nodes (max: ${MAX_NODES})`);
+
+      // Performance-optimized ForceGraph3D
+      graph3D = ForceGraph3D({ controlType: 'orbit' })(container)
         .graphData({ nodes, links })
-        .nodeLabel(n => `${getIcon(n.type,n.ext)} ${n.name}\n${formatBytes(n.size)}`)
+        .nodeLabel(n => `${getIcon(n.type, n.ext)} ${n.name}\n${formatBytes(n.size)}`)
         .nodeColor(n => n.color)
         .nodeVal(n => n.val)
-        .linkColor(() => 'rgba(88,166,255,0.2)')
-        .linkWidth(0.3)
-        .backgroundColor('#0d1117');
+        .nodeOpacity(0.9)
+        .linkColor(() => 'rgba(88,166,255,0.15)')
+        .linkWidth(0.2)
+        .linkOpacity(0.3)
+        .backgroundColor('#0d1117')
+        // PERFORMANCE SETTINGS
+        .warmupTicks(50)           // Pre-calculate physics
+        .cooldownTicks(0)          // No animation after warmup
+        .d3AlphaDecay(0.05)        // Faster settling
+        .d3VelocityDecay(0.3)      // More damping
+        .nodeResolution(8)         // Lower poly spheres (default: 8)
+        .linkDirectionalParticles(0) // Disable particles
+        .enableNodeDrag(false)     // Disable drag for perf
+        .showNavInfo(false);       // Hide nav info
+
+      // Optional: pause simulation after warmup
+      setTimeout(() => {
+        if (graph3D) {
+          graph3D.pauseAnimation();
+          showPerf(0, nodes.length);
+        }
+      }, 1000);
     }
 
     function showPerf(ms, count) {
@@ -843,8 +891,8 @@
     function computeAnalytics(nodes) {
       const files = nodes.filter(n => n.type !== 'directory' && n.size > 0);
       const dirs = nodes.filter(n => n.type === 'directory');
-      const sizes = files.map(f => f.size).sort((a,b) => a - b);
-      const totalSize = sizes.reduce((a,b) => a + b, 0);
+      const sizes = files.map(f => f.size).sort((a, b) => a - b);
+      const totalSize = sizes.reduce((a, b) => a + b, 0);
 
       // Stats
       $('s-items').textContent = formatNum(nodes.length);
@@ -854,21 +902,21 @@
 
       // Metrics
       $('m-avg').textContent = formatBytes(totalSize / files.length || 0);
-      $('m-median').textContent = formatBytes(sizes[Math.floor(sizes.length/2)] || 0);
+      $('m-median').textContent = formatBytes(sizes[Math.floor(sizes.length / 2)] || 0);
       $('m-depth').textContent = Math.max(...nodes.map(n => n.depth || 0), 0);
       const exts = new Set(files.map(f => f.ext).filter(Boolean));
       $('m-types').textContent = exts.size;
 
       // Extension chart
       const extCounts = {};
-      files.forEach(f => { if (f.ext) extCounts[f.ext] = (extCounts[f.ext]||0) + 1; });
-      const sorted = Object.entries(extCounts).sort((a,b) => b[1] - a[1]).slice(0, 10);
+      files.forEach(f => { if (f.ext) extCounts[f.ext] = (extCounts[f.ext] || 0) + 1; });
+      const sorted = Object.entries(extCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
       const maxCount = sorted[0]?.[1] || 1;
 
       $('ext-chart').innerHTML = sorted.map(([ext, count]) => `
         <div class="bar-row">
           <span class="bar-label">${ext}</span>
-          <div class="bar-track"><div class="bar-fill" style="width:${count/maxCount*100}%;background:${COLORS[ext]||COLORS.default}"></div></div>
+          <div class="bar-track"><div class="bar-fill" style="width:${count / maxCount * 100}%;background:${COLORS[ext] || COLORS.default}"></div></div>
           <span class="bar-count">${formatNum(count)}</span>
         </div>
       `).join('');
@@ -876,43 +924,43 @@
       // Filters
       $('filters').innerHTML = Array.from(exts).slice(0, 12).map(ext => `
         <div class="filter-chip${activeFilters.has(ext) ? ' active' : ''}" data-ext="${ext}">
-          <span class="dot" style="background:${COLORS[ext]||COLORS.default}"></span>${ext}
+          <span class="dot" style="background:${COLORS[ext] || COLORS.default}"></span>${ext}
         </div>
       `).join('');
 
       // Size distribution
-      const buckets = new Array(20).fi l l(0);
-        const maxSize = Math.max(...sizes, 1);
+      const buckets = new Array(20).fill(0);
+      const maxSize = Math.max(...sizes, 1);
       files.forEach(f => { const i = Math.min(19, Math.floor(f.size / maxSize * 19)); buckets[i]++; });
       const maxBucket = Math.max(...buckets, 1);
       $('size-dist').innerHTML = buckets.map((c, i) =>
-        `<div class="mini-bar" style="left:${i*5}%;width:4%;height:${c/maxBucket*100}%"></div>`
+        `<div class="mini-bar" style="left:${i * 5}%;width:4%;height:${c / maxBucket * 100}%"></div>`
       ).join('');
 
       // Top files
-      const topFiles = [...files].sort((a,b) => b.size - a.size).slice(0, 8);
+      const topFiles = [...files].sort((a, b) => b.size - a.size).slice(0, 8);
       $('top-files').innerHTML = topFiles.map((f, i) => `
-        <div class="top-file"><span class="top-rank">${i+1}</span><span class="top-name" title="${f.path}">${f.name}</span><span class="top-size">${formatBytes(f.size)}</span></div>
+        <div class="top-file"><span class="top-rank">${i + 1}</span><span class="top-name" title="${f.path}">${f.name}</span><span class="top-size">${formatBytes(f.size)}</span></div>
       `).join('');
 
       // Top dirs
-      const topDirs = [...dirs].filter(d => d.size > 0).sort((a,b) => b.size - a.size).slice(0, 6);
+      const topDirs = [...dirs].filter(d => d.size > 0).sort((a, b) => b.size - a.size).slice(0, 6);
       $('top-dirs').innerHTML = topDirs.map((d, i) => `
-        <div class="top-file"><span class="top-rank">${i+1}</span><span class="top-name" title="${d.path}">📁 ${d.name}</span><span class="top-size">${formatBytes(d.size)}</span></div>
+        <div class="top-file"><span class="top-rank">${i + 1}</span><span class="top-name" title="${d.path}">📁 ${d.name}</span><span class="top-size">${formatBytes(d.size)}</span></div>
       `).join('');
 
       // Recent files
-      const recent = [...files].filter(f => f.modifiedAt).sort((a,b) => (b.modifiedAt||0) - (a.modifiedAt||0)).slice(0, 5);
+      const recent = [...files].filter(f => f.modifiedAt).sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0)).slice(0, 5);
       $('recent-files').innerHTML = recent.map(f => {
-        const ago = Date.now() - (f.modifiedAt||0);
-        const when = ago < 3600000 ? Math.floor(ago/60000)+'m' : ago < 86400000 ? Math.floor(ago/3600000)+'h' : Math.floor(ago/86400000)+'d';
+        const ago = Date.now() - (f.modifiedAt || 0);
+        const when = ago < 3600000 ? Math.floor(ago / 60000) + 'm' : ago < 86400000 ? Math.floor(ago / 3600000) + 'h' : Math.floor(ago / 86400000) + 'd';
         return `<div class="top-file"><span class="top-name">${f.name}</span><span class="top-size">${when} ago</span></div>`;
       }).join('') || '<div style="color:var(--dim)">No recent data</div>';
 
       // Duplicates by name
       const nameCounts = {};
-      files.forEach(f => { nameCounts[f.name] = (nameCounts[f.name]||0) + 1; });
-      const dupes = Object.entries(nameCounts).filter(([,c]) => c > 1).sort((a,b) => b[1] - a[1]).slice(0, 5);
+      files.forEach(f => { nameCounts[f.name] = (nameCounts[f.name] || 0) + 1; });
+      const dupes = Object.entries(nameCounts).filter(([, c]) => c > 1).sort((a, b) => b[1] - a[1]).slice(0, 5);
       $('duplicates').innerHTML = dupes.map(([name, count]) =>
         `<div class="top-file"><span class="top-name">${name}</span><span class="top-size">×${count}</span></div>`
       ).join('') || '<div style="color:var(--dim)">No duplicates</div>';
@@ -977,7 +1025,7 @@
         current = current.parent;
       }
       $('breadcrumb').innerHTML = `<div class="crumb" onclick="resetView()">🏠</div>` +
-        crumbs.slice(0, 5).map((n, i) => `<div class="crumb">${n.name?.slice(0,15) || 'root'}</div>`).join('');
+        crumbs.slice(0, 5).map((n, i) => `<div class="crumb">${n.name?.slice(0, 15) || 'root'}</div>`).join('');
     }
 
     window.resetView = () => { if (hierarchy) switchView(currentView); };
@@ -1007,8 +1055,8 @@
     });
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // FILTERS 
-     // ══ ═ ════════════════════════════════════════════════════════════════════════
+    // FILTERS
+    // ══ ═ ════════════════════════════════════════════════════════════════════════
     $('filters').addEventListener('click', e => {
       const chip = e.target.closest('.filter-chip');
       if (!chip) return;
