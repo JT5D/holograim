@@ -598,6 +598,14 @@
         <span><span class="stat-val" id="s-dirs">0</span> folders</span>
         <span><span class="stat-val" id="s-files">0</span> files</span>
       </div>
+      <div class="export-container">
+        <button id="export-btn" class="export-btn" title="Export Visualization">📤 Export</button>
+        <div id="export-menu" class="export-menu">
+          <button data-export="png">📸 PNG Screenshot</button>
+          <button data-export="json">📄 JSON Data</button>
+          <button data-export="csv">📊 CSV Summary</button>
+        </div>
+      </div>
     </header>
 
     <aside class="sidebar">
@@ -888,69 +896,59 @@
       const nodes = [], links = [];
       let id = 0;
 
-      // PERFORMANCE: Limit total nodes for 60fps on Apple Silicon
-      const MAX_NODES = 2000;  // Optimal for 60fps
-      const MAX_CHILDREN_PER_NODE = 50;
+      // AGGRESSIVE PERFORMANCE: Much lower limits for smooth 60fps
+      const MAX_NODES = 500;   // Dramatically reduced for 60fps
+      const MAX_CHILDREN = 20; // Fewer children per node
+      const MAX_DEPTH = 3;     // Shallower traversal
 
       const traverse = (node, parentId = null, depth = 0) => {
         if (nodes.length >= MAX_NODES) return;
-        if (depth > 5) return; // Limit depth for performance
+        if (depth > MAX_DEPTH) return;
 
         const nid = id++;
-        const nodeSize = Math.log10(Math.max(node.size || 1, 1)) + 1;
-
         nodes.push({
           id: nid,
           name: node.name,
-          type: node.type,
-          size: node.size,
-          ext: node.ext,
           color: getColor(node.type, node.ext),
-          val: nodeSize,
-          // Pre-compute for faster rendering
-          __threeObj: null
+          val: Math.log10(Math.max(node.size || 1, 1)) + 1
         });
 
-        if (parentId !== null) {
-          links.push({ source: parentId, target: nid });
-        }
-
-        // Limit children per node
-        const children = (node.children || []).slice(0, MAX_CHILDREN_PER_NODE);
-        children.forEach(c => traverse(c, nid, depth + 1));
+        if (parentId !== null) links.push({ source: parentId, target: nid });
+        (node.children || []).slice(0, MAX_CHILDREN).forEach(c => traverse(c, nid, depth + 1));
       };
       traverse(root);
 
       console.log(`🎮 3D Graph: ${nodes.length} nodes (max: ${MAX_NODES})`);
 
-      // Performance-optimized ForceGraph3D
+      // ULTRA-OPTIMIZED ForceGraph3D
       graph3D = ForceGraph3D({ controlType: 'orbit' })(container)
         .graphData({ nodes, links })
-        .nodeLabel(n => `${getIcon(n.type, n.ext)} ${n.name}\n${formatBytes(n.size)}`)
+        .nodeLabel(n => n.name)
         .nodeColor(n => n.color)
         .nodeVal(n => n.val)
-        .nodeOpacity(0.9)
-        .linkColor(() => 'rgba(88,166,255,0.15)')
-        .linkWidth(0.2)
-        .linkOpacity(0.3)
+        .nodeOpacity(0.85)
+        .nodeResolution(4)         // Very low poly (default: 8)
+        .linkColor(() => 'rgba(88,166,255,0.1)')
+        .linkWidth(0.1)
+        .linkOpacity(0.2)
         .backgroundColor('#0d1117')
-        // PERFORMANCE SETTINGS
-        .warmupTicks(50)           // Pre-calculate physics
-        .cooldownTicks(0)          // No animation after warmup
-        .d3AlphaDecay(0.05)        // Faster settling
-        .d3VelocityDecay(0.3)      // More damping
-        .nodeResolution(8)         // Lower poly spheres (default: 8)
-        .linkDirectionalParticles(0) // Disable particles
-        .enableNodeDrag(false)     // Disable drag for perf
-        .showNavInfo(false);       // Hide nav info
+        // ULTRA PERFORMANCE
+        .warmupTicks(30)           // Fewer warmup ticks
+        .cooldownTicks(0)          // No post-warmup animation
+        .d3AlphaDecay(0.1)         // Very fast settling
+        .d3VelocityDecay(0.5)      // High damping
+        .linkDirectionalParticles(0)
+        .enableNodeDrag(false)
+        .enablePointerInteraction(false) // Disable hover effects
+        .showNavInfo(false);
 
-      // Optional: pause simulation after warmup
+      // Immediately pause after brief warmup
       setTimeout(() => {
         if (graph3D) {
           graph3D.pauseAnimation();
           showPerf(0, nodes.length);
         }
-      }, 1000);
+      }, 500);
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -988,28 +986,33 @@
       camera3D = new THREE.PerspectiveCamera(60, rect.width / rect.height, 0.1, 1000);
       camera3D.position.set(0, 50, 80);
 
-      renderer3D = new THREE.WebGLRenderer({ antialias: true });
+      // PERFORMANCE: Disable antialiasing, limit pixel ratio
+      renderer3D = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
       renderer3D.setSize(rect.width, rect.height);
-      renderer3D.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer3D.setPixelRatio(1); // Fixed pixel ratio for performance
       container.appendChild(renderer3D.domElement);
 
       controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
       controls3D.enableDamping = true;
-      controls3D.dampingFactor = 0.05;
+      controls3D.dampingFactor = 0.1;
+      controls3D.rotateSpeed = 0.5;
 
       // Build treemap layout
       const d3Root = d3.hierarchy(root).sum(d => d.size || 1).sort((a, b) => b.value - a.value);
-      const TREEMAP_SIZE = 100;
-      d3.treemap().size([TREEMAP_SIZE, TREEMAP_SIZE]).paddingOuter(2).paddingTop(4).paddingInner(1)(d3Root);
+      const TREEMAP_SIZE = 80;
+      d3.treemap().size([TREEMAP_SIZE, TREEMAP_SIZE]).paddingOuter(1).paddingTop(2).paddingInner(0.5)(d3Root);
 
-      const MAX_DEPTH = 4;
-      const nodes = d3Root.descendants().filter(d => d.depth > 0 && d.depth <= MAX_DEPTH);
+      // PERFORMANCE: Limit depth and total nodes
+      const MAX_DEPTH = 2;
+      const MAX_CUBES = 300;
+      let nodes = d3Root.descendants().filter(d => d.depth > 0 && d.depth <= MAX_DEPTH);
+      nodes = nodes.slice(0, MAX_CUBES);
 
-      // Create cubes
+      // Create cubes with simpler materials
       nodes.forEach(d => {
         const w = d.x1 - d.x0;
         const h = d.y1 - d.y0;
-        if (w < 0.5 || h < 0.5) return;
+        if (w < 1 || h < 1) return;
 
         const height = Math.max(1, Math.log10(d.value + 1) * 3);
         const geo = new THREE.BoxGeometry(w * 0.95, height, h * 0.95);
@@ -1069,31 +1072,36 @@
 
       const rect = container.getBoundingClientRect();
       camera3D = new THREE.PerspectiveCamera(60, rect.width / rect.height, 0.1, 1000);
-      camera3D.position.set(0, 60, 80);
+      camera3D.position.set(0, 40, 60);
 
-      renderer3D = new THREE.WebGLRenderer({ antialias: true });
+      // PERFORMANCE: Disable antialiasing
+      renderer3D = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
       renderer3D.setSize(rect.width, rect.height);
-      renderer3D.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer3D.setPixelRatio(1);
       container.appendChild(renderer3D.domElement);
 
       controls3D = new THREE.OrbitControls(camera3D, renderer3D.domElement);
       controls3D.enableDamping = true;
+      controls3D.dampingFactor = 0.1;
 
       // Build partition layout
       const d3Root = d3.hierarchy(root).sum(d => d.size || 1).sort((a, b) => b.value - a.value);
-      d3.partition().size([2 * Math.PI, 40])(d3Root);
+      d3.partition().size([2 * Math.PI, 30])(d3Root);
 
-      const MAX_DEPTH = 5;
-      const nodes = d3Root.descendants().filter(d => d.depth > 0 && d.depth <= MAX_DEPTH);
+      // PERFORMANCE: Lower limits
+      const MAX_DEPTH = 2;
+      const MAX_ARCS = 200;
+      let nodes = d3Root.descendants().filter(d => d.depth > 0 && d.depth <= MAX_DEPTH);
+      nodes = nodes.slice(0, MAX_ARCS);
 
-      // Create arc segments as 3D curved meshes
+      // Create simplified arc segments
       nodes.forEach(d => {
         const innerR = d.y0;
         const outerR = d.y1;
         const startAngle = d.x0;
         const endAngle = d.x1;
 
-        if (endAngle - startAngle < 0.01) return;
+        if (endAngle - startAngle < 0.05) return; // Skip tiny arcs
 
         // Create ring segment shape
         const shape = new THREE.Shape();
