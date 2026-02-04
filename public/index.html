@@ -191,6 +191,61 @@
       font-weight: 600;
     }
 
+    .export-container {
+      position: relative;
+      margin-left: 12px;
+    }
+
+    .export-btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .export-btn:hover {
+      background: #79c0ff;
+    }
+
+    .export-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px;
+      display: none;
+      min-width: 140px;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .export-menu.visible {
+      display: block;
+    }
+
+    .export-menu button {
+      display: block;
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      padding: 8px 12px;
+      text-align: left;
+      cursor: pointer;
+      border-radius: 4px;
+      font-size: 0.8rem;
+    }
+
+    .export-menu button:hover {
+      background: rgba(88, 166, 255, 0.2);
+    }
+
     /* Sidebar */
     .sidebar {
       background: var(--surface);
@@ -1610,6 +1665,89 @@
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey && document.activeElement.tagName !== 'INPUT') {
         e.preventDefault();
         startVoice();
+      }
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EXPORT FUNCTIONALITY
+    // ═══════════════════════════════════════════════════════════════════════════
+    function downloadFile(filename, content, type = 'text/plain') {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    async function exportPNG() {
+      const vizArea = document.querySelector('.viz-area');
+      const container3d = $('graph3d-container');
+      const threejsContainer = $('threejs-container');
+
+      let targetCanvas;
+      if (container3d && container3d.style.display !== 'none') {
+        targetCanvas = container3d.querySelector('canvas');
+      } else if (threejsContainer && threejsContainer.style.display !== 'none') {
+        targetCanvas = threejsContainer.querySelector('canvas');
+      } else {
+        targetCanvas = canvas;
+      }
+
+      if (targetCanvas) {
+        const dataUrl = targetCanvas.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `ultra-crawler-${currentView}-${Date.now()}.png`;
+        a.click();
+        showVoiceFeedback('📸 PNG exported!');
+      }
+    }
+
+    function exportJSON() {
+      if (!hierarchy) {
+        showVoiceFeedback('❌ No data to export');
+        return;
+      }
+      const json = JSON.stringify(hierarchy, null, 2);
+      downloadFile(`ultra-crawler-data-${Date.now()}.json`, json, 'application/json');
+      showVoiceFeedback('📄 JSON exported!');
+    }
+
+    function exportCSV() {
+      if (!flatNodes || flatNodes.length === 0) {
+        showVoiceFeedback('❌ No data to export');
+        return;
+      }
+      const header = 'name,type,size,extension,path\n';
+      const rows = flatNodes.slice(0, 10000).map(n =>
+        `"${n.name}","${n.type}",${n.size || 0},"${n.ext || ''}","${(n.path || '').replace(/"/g, '""')}"`
+      ).join('\n');
+      downloadFile(`ultra-crawler-summary-${Date.now()}.csv`, header + rows, 'text/csv');
+      showVoiceFeedback('📊 CSV exported!');
+    }
+
+    // Export button toggle
+    $('export-btn').addEventListener('click', () => {
+      $('export-menu').classList.toggle('visible');
+    });
+
+    // Export menu items
+    document.querySelectorAll('[data-export]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const type = btn.dataset.export;
+        $('export-menu').classList.remove('visible');
+        if (type === 'png') exportPNG();
+        else if (type === 'json') exportJSON();
+        else if (type === 'csv') exportCSV();
+      });
+    });
+
+    // Close menu on outside click
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.export-container')) {
+        $('export-menu').classList.remove('visible');
       }
     });
 
