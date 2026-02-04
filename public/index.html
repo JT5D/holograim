@@ -10,6 +10,10 @@
   <!-- Three.js for 3D Treemap and Sunburst (use 0.145 for global script compatibility) -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/build/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- WebXR for AR mode -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.145.0/examples/js/webxr/ARButton.js"></script>
+  <!-- PeerJS for multiplayer -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <style>
     * {
       margin: 0;
@@ -438,6 +442,87 @@
       color: var(--accent);
     }
 
+    /* AR & Multiplayer */
+    .ar-btn,
+    .mp-btn {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+
+    .ar-btn:hover,
+    .mp-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+    }
+
+    .multiplayer-container {
+      position: relative;
+    }
+
+    .mp-menu {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      display: none;
+      min-width: 200px;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+
+    .mp-menu.visible {
+      display: block;
+    }
+
+    .mp-menu input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      font-size: 0.8rem;
+    }
+
+    .mp-status {
+      font-size: 0.75rem;
+      color: var(--dim);
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    .mp-menu button {
+      width: 100%;
+      padding: 8px;
+      margin-bottom: 4px;
+      background: var(--accent);
+      border: none;
+      border-radius: 4px;
+      color: white;
+      cursor: pointer;
+    }
+
+    .mp-menu button#mp-join {
+      background: var(--surface);
+      border: 1px solid var(--accent);
+    }
+
+    .mp-connected .mp-btn {
+      background: rgba(63, 185, 80, 0.2);
+      color: var(--success);
+      border-color: var(--success);
+    }
+
     /* Bar Chart */
     .bar-chart {}
 
@@ -659,6 +744,16 @@
           <button data-export="png">📸 PNG Screenshot</button>
           <button data-export="json">📄 JSON Data</button>
           <button data-export="csv">📊 CSV Summary</button>
+        </div>
+      </div>
+      <button id="ar-btn" class="ar-btn" title="AR View (requires WebXR device)">🥽 AR</button>
+      <div class="multiplayer-container">
+        <button id="mp-btn" class="mp-btn" title="Multiplayer">👥 Multi</button>
+        <div id="mp-menu" class="mp-menu">
+          <input type="text" id="mp-room" placeholder="Room code...">
+          <button id="mp-create">Create Room</button>
+          <button id="mp-join">Join Room</button>
+          <div id="mp-status"></div>
         </div>
       </div>
     </header>
@@ -1745,10 +1840,167 @@
     });
 
     // Close menu on outside click
+    // Close menu on outside click
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.export-container')) {
         $('export-menu').classList.remove('visible');
       }
+      if (!e.target.closest('.multiplayer-container') && !e.target.closest('.mp-menu')) {
+        $('mp-menu').classList.remove('visible');
+      }
+    });
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // MULTIPLAYER (PeerJS) & AR (WebXR)
+    // ═══════════════════════════════════════════════════════════════════════════
+    const mp = {
+      peer: null,
+      conn: [],
+      id: null,
+      peers: {}, // { id: { mesh, data, color } }
+      isHost: false,
+      color: '#' + Math.floor(Math.random() * 16777215).toString(16),
+      room: null
+    };
+
+    // Toggle MP Menu
+    $('mp-btn').addEventListener('click', () => $('mp-menu').classList.toggle('visible'));
+
+    // Create Room
+    $('mp-create').addEventListener('click', () => {
+      initPeer(null, true);
+    });
+
+    // Join Room
+    $('mp-join').addEventListener('click', () => {
+      const room = $('mp-room').value.trim();
+      if (room) initPeer(room, false);
+    });
+
+    function initPeer(roomId, isHost) {
+      // Use public PeerServer (free, scalable)
+      mp.peer = new Peer(roomId || undefined, {
+        debug: 1,
+        config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] }
+      });
+
+      mp.peer.on('open', (id) => {
+        mp.id = id;
+        mp.isHost = isHost;
+        mp.room = id;
+        $('mp-status').innerHTML = `Room: <b>${id}</b><br>Status: Connected (You)`;
+        $('mp-room').value = id;
+        document.body.classList.add('mp-connected');
+        showVoiceFeedback(isHost ? `Created Room: ${id}` : `Joined Room: ${id}`);
+        startSyncLoop();
+      });
+
+      mp.peer.on('connection', (conn) => {
+        setupConnection(conn);
+      });
+
+      mp.peer.on('error', (err) => {
+        console.error(err);
+        $('mp-status').innerText = `Error: ${err.type}`;
+      });
+
+      if (!isHost && roomId) {
+        const conn = mp.peer.connect(roomId);
+        setupConnection(conn);
+      }
+    }
+
+    function setupConnection(conn) {
+      mp.conn.push(conn);
+
+      conn.on('open', () => {
+        // Send our color
+        conn.send({ type: 'init', color: mp.color, id: mp.id });
+        $('mp-status').innerHTML += `<br>Peer joined!`;
+        showVoiceFeedback('👤 Peer connected!');
+      });
+
+      conn.on('data', (data) => {
+        handlePeerData(conn.peer, data);
+      });
+
+      conn.on('close', () => {
+        removePeerAvatar(conn.peer);
+      });
+    }
+
+    function handlePeerData(peerId, data) {
+      if (data.type === 'init') {
+        if (!mp.peers[peerId]) createPeerAvatar(peerId, data.color);
+      } else if (data.type === 'sync') {
+        updatePeerPose(peerId, data.pos, data.rot);
+      }
+    }
+
+    // Telepresence: Sync Position/Rotation
+    function startSyncLoop() {
+      setInterval(() => {
+        if (!mp.conn.length) return;
+
+        let pos, rot;
+        if (camera3D) {
+          pos = camera3D.position.toArray();
+          rot = camera3D.quaternion.toArray();
+        } else if (graph3D) {
+          // ForceGraph3D camera access
+          const cam = graph3D.camera();
+          pos = [cam.position.x, cam.position.y, cam.position.z];
+          rot = [cam.quaternion.x, cam.quaternion.y, cam.quaternion.z, cam.quaternion.w];
+        } else {
+          return;
+        }
+
+        const payload = { type: 'sync', pos, rot };
+        mp.conn.forEach(c => c.send(payload));
+      }, 50); // 20 updates/sec
+    }
+
+    function createPeerAvatar(id, color) {
+      // Simple sphere avatar
+      const geometry = new THREE.SphereGeometry(2, 16, 16); // Size 2
+      const material = new THREE.MeshBasicMaterial({ color: color });
+      const mesh = new THREE.Mesh(geometry, material);
+
+      // Inject into current scene
+      if (scene3D) {
+        scene3D.add(mesh);
+      } else if (graph3D) {
+        graph3D.scene().add(mesh);
+      }
+
+      mp.peers[id] = { mesh, data: {} };
+    }
+
+    function updatePeerPose(id, pos, rot) {
+      const peer = mp.peers[id];
+      if (!peer || !peer.mesh) return;
+
+      peer.mesh.position.set(pos[0], pos[1], pos[2]);
+      peer.mesh.quaternion.set(rot[0], rot[1], rot[2], rot[3]);
+    }
+
+    function removePeerAvatar(id) {
+      if (mp.peers[id]) {
+        const mesh = mp.peers[id].mesh;
+        if (mesh.parent) mesh.parent.remove(mesh);
+        delete mp.peers[id];
+      }
+    }
+
+    // AR Button Logic
+    $('ar-btn').addEventListener('click', () => {
+      if (!renderer3D) return;
+
+      // Enable XR
+      renderer3D.xr.enabled = true;
+      document.body.appendChild(THREE.ARButton.createButton(renderer3D));
+
+      showVoiceFeedback('🥽 AR Mode Ready - Click "START AR" at bottom');
     });
 
   </script>
